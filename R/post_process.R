@@ -8,6 +8,10 @@ library(ggrepel)
 library(stringr)
 library(patchwork)
 library(scales)
+library(Polychrome)
+library(wesanderson)
+
+set.seed(1234)
 
 vae <- torch_load("data/trained_vae_1.to")
 
@@ -80,10 +84,16 @@ bioclim_cats <-
 )
 
 ecoreg_names <- read_csv("data/ecoreg_names.csv") %>%
-  mutate(BIOME_NUM = as.character(BIOME_NUM))
+  mutate(BIOME_NUM = as.character(BIOME_NUM)) %>%
+    mutate(BIOME_NAME = str_wrap(BIOME_NAME, 35))
 
 mani_df <- as.data.frame(mani_ecoreg, na.rm = TRUE) %>%
   select(starts_with("BIOMAN"), layer, starts_with("wc2.1_2.5m_bio"))
+
+ecoreg_pal <- createPalette(n_distinct(ecoreg_names$BIOME_NAME),
+                            wes_palettes$FantasticFox1[-1])
+
+names(ecoreg_pal) <- ecoreg_names$BIOME_NAME
 
 S_sqrt <- function(x){sign(x)*sqrt(abs(x))}
 IS_sqrt <- function(x){x^2*sign(x)}
@@ -123,8 +133,7 @@ plot_manifold <- function(var_name, num_intervals = 25) {
     ungroup() %>%
     arrange(desc(BIOME_NAME)) %>%
     mutate(ypos = cumsum(props)) %>%
-    mutate(ypos = (ypos + lag(ypos, default = 0)) / 2) %>%
-    mutate(BIOME_NAME = str_wrap(BIOME_NAME, 35))
+    mutate(ypos = (ypos + lag(ypos, default = 0)) / 2)
 
   mani_1_df2 <- mani_1_df %>%
     select(-biomes, -count) %>%
@@ -171,9 +180,9 @@ plot_manifold <- function(var_name, num_intervals = 25) {
     ylab("") +
     theme_minimal() +
     #theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0)) +
-    theme(legend.position = c(0.2, 1.2),
-          legend.direction = "horizontal",
-          legend.text = element_text(angle = -45, hjust = 0, vjust = 0),
+    theme(legend.position = c(0.93, 0.5),
+          # legend.direction = "horizontal",
+          # legend.text = element_text(angle = -45, hjust = 0, vjust = 0),
           plot.margin = unit(c(0.1, 00, 0.1, 0), "npc"))
 
   p1
@@ -190,6 +199,7 @@ plot_manifold <- function(var_name, num_intervals = 25) {
     scale_x_continuous(expand = expansion(c(0, 0.75))) +
     scale_y_continuous(limits = c(0, 1.1), expand = c(0.1, 0.1),
                        breaks = c(0, 0.25, 0.5, 0.75, 1.0)) +
+    scale_fill_manual(values = ecoreg_pal) +
     coord_cartesian(clip = "off") +
     theme_minimal() +
     theme(legend.position = "none",
@@ -204,7 +214,9 @@ plot_manifold <- function(var_name, num_intervals = 25) {
 }
 
 p1 <- plot_manifold(BIOMAN1)
-p1
+#cairo_pdf("figures/manifold_1.pdf", height = 15, width = 12)
+plot(p1)
+#dev.off()
 p2 <- plot_manifold(BIOMAN2)
 p2
 p3 <- plot_manifold(BIOMAN3)

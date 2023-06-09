@@ -31,6 +31,10 @@ bioclim_dataset <- dataset(name = "bioclim_ds",
 train_ds <- bioclim_dataset(bioclim_mat)
 train_dl <- dataloader(train_ds, 500000, shuffle = TRUE)
 
+## note that this module includes the ability to provide data to condition on, making
+## it a 'conditional VAE', however, for this study I do not use any conditioning information
+## In this case we just provide a tensor of zeroes for the conditioning data, effectively turning
+## it into an unconditional VAE. The conditioning ability is for future extensions.
 vae_mod <- nn_module("CVAE",
                  initialize = function(input_dim, c_dim, latent_dim, loggamma_init = 0) {
                    self$latent_dim <- latent_dim
@@ -40,8 +44,6 @@ vae_mod <- nn_module("CVAE",
                                          c_1 = c ~ c_dim,
                                          e_1 = i_1 + c_1 ~ latent_dim * 2,
                                          e_2 = e_1 + c_1 ~ latent_dim * 2,
-                                         # e_1 = i_1 + c_1 ~ latent_dim * 2^3,
-                                         # e_2 = e_1 + c_1 ~ latent_dim * 2^2,
                                          e_3 = e_2 + c_1 ~ latent_dim * 2,
                                          means = e_3 ~ latent_dim,
                                          logvars = e_3 ~ latent_dim,
@@ -54,15 +56,13 @@ vae_mod <- nn_module("CVAE",
                                          c_1 = c ~ c_dim,
                                          d_1 = i_1 + c_1 ~ latent_dim * 2,
                                          d_2 = d_1 + c_1 ~ latent_dim * 2,
-                                         # d_1 = i_1 + c_1 ~ latent_dim * 2^1,
-                                         # d_2 = d_1 + c_1 ~ latent_dim * 2^2,
                                          d_3 = d_2 + c_1 ~ latent_dim * 2,
                                          out = d_3 ~ input_dim,
                                          .act = list(nn_relu,
                                                      out = nn_identity))
 
                    self$loggamma <- nn_parameter(torch_tensor(loggamma_init))
-                   #self$loggamma <- 0
+
                  },
                  reparameterize = function(mean, logvar) {
                    std <- torch_exp(torch_tensor(0.5, device = "cuda") * logvar)
@@ -70,14 +70,6 @@ vae_mod <- nn_module("CVAE",
                    eps * std + mean
                  },
                  loss_function = function(reconstruction, input, mean, log_var) {
-                   #reconstruction_loss <- nnf_binary_cross_entropy(reconstruction, input, reduction = "sum")
-                   # kl_loss <- torch_tensor(-0.5, device = "cuda") * torch_sum(torch_tensor(1, device = "cuda") + log_var - mean^2 - log_var$exp(), dim = 2L)
-                   # recon1 <- torch_sum(torch_square((input - reconstruction) / torch_exp(self$loggamma)) / 2, dim = 2L)
-                   # recon2 <- recon1 + self$input_dim*self$loggamma + torch_log(2 * torch_tensor(pi, device = "cuda"))*self$input_dim
-                   # #recon <- torch_mean(recon2)
-                   # #kl <- torch_mean(kl_loss)
-                   # loss <- torch_mean(recon2 + kl_loss)
-                   #self$loggamma <- loggamma
                    kl <- torch_sum(torch_exp(log_var) + torch_square(mean) - log_var, dim = 2L) - latent_dim
                    recon1 <- torch_sum(torch_square(input - reconstruction), dim = 2L) / torch_exp(self$loggamma)
                    recon2 <- self$input_dim * self$loggamma + torch_log(torch_tensor(2 * pi, device = "cuda")) * self$input_dim
@@ -105,9 +97,6 @@ scheduler <- lr_one_cycle(optimizer, max_lr = lr,
                           epochs = num_epochs, steps_per_epoch = length(train_dl),
                           cycle_momentum = FALSE)
 
-# gamma_x <- 1
-# mseloss <- 1#gamma_x^2
-# loggamma <- log(gamma_x)
 
 for (epoch in 1:num_epochs) {
 
@@ -117,14 +106,10 @@ for (epoch in 1:num_epochs) {
         batchnum <- batchnum + 1
         input <- b$to(device = "cuda")
         optimizer$zero_grad()
-        c_null <- torch_zeros(input$size()[[1]], 1, device = "cuda")
+        c_null <- torch_zeros(input$size()[[1]], 1, device = "cuda") ## null conditioning data
         c(reconstruction, input, mean, log_var) %<-% vae(input, c_null)
-        c(loss, reconstruction_loss, kl_loss) %<-% vae$loss_function(reconstruction, input, mean, log_var)#,
-                                                                     #torch_tensor(loggamma, device = "cuda"))
+        c(loss, reconstruction_loss, kl_loss) %<-% vae$loss_function(reconstruction, input, mean, log_var)
 
-        # mseloss <- min(mseloss, mseloss * .99 + as.numeric(reconstruction_loss$cpu() / vae$input_dim) * .01)
-        # gamma_x <- sqrt(mseloss)
-        # loggamma <- log(gamma_x)
 
         if(batchnum %% 10 == 0) {
 
@@ -148,6 +133,7 @@ for (epoch in 1:num_epochs) {
 ############### figures for VAE #####################
 
 vae <- torch_load("data/trained_vae_1.to")
+vae <- vae$cuda()
 
 post_dl <- dataloader(train_ds, 500000, shuffle = FALSE)
 post_it <- as_iterator(post_dl)
@@ -184,6 +170,29 @@ ggplot(vars_df, aes(`Mean Variance`)) +
 
 manifold_dims <- vars < 0.5
 
+non_manifold_dim_nums <- which(!manifold_dims)
+write_rds(non_manifold_dim_nums, "data/non_manifold_dim_nums.rds")
+
+## run decoder using only manifold dimensions and calculate reconstruction
+recon_loss <- list()
+it <- 0
+loop(for(i in post_dl) {
+  it <- it + 1
+  with_no_grad({
+    c_null <- torch_zeros(i$size()[[1]], 1, device = "cuda")
+    all_mean_var <- vae$encoder(c_null, i$cuda())
+    z <- all_mean_var$means$clone()
+    z[ , non_manifold_dim_nums] <- 0
+    recon <- vae$decoder(c_null, z)
+    recon_loss[[it]] <- torch_mean((i$cuda() - recon)^2)
+
+  })
+  print(it)
+})
+mse <- mean(unlist(map(recon_loss, ~ as.numeric(.x$cpu()))))
+
+## MSE = 0.0036
+
 mean_variances <- apply(all_means, 2, var)
 
 bioclim_df <- as.data.frame(bioclim, na.rm = TRUE, xy = TRUE) %>%
@@ -200,8 +209,6 @@ ggplot(bioclim_df, aes(x, y)) +
   coord_equal() +
   theme_minimal()
 
-# vae_rast <- rast(bioclim_df, type = "xyz", crs = crs(bioclim), extent = ext(bioclim),
-#                  digits = 8)
 vae_rast <- rast(bioclim_df, type = "xyz", crs = crs(bioclim), extent = ext(c(min(bioclim_df$x),
                                                                               max(bioclim_df$x),
                                                                               min(bioclim_df$y),

@@ -231,14 +231,7 @@ tar_plan(
 
   tar_target(AUC_summ_1, AUC_1 %>%
                group_by(model, dataset, rep) %>%
-               mutate(delta_auc = auc - auc[env == "bc"]),# %>%
-               # group_by(env, model, dataset) %>%
-               # summarise(auc_mean = mean(auc),
-               #           auc_sd = sd(auc),
-               #           auc_med = median(auc),
-               #           delta_auc_mean = mean(delta_auc),
-               #           delta_auc_sd = sd(delta_auc),
-               #           delta_auc_median = median(delta_auc)),
+               mutate(delta_auc = auc - auc[env == "bc"]),
              pattern = map(AUC_1)),
 
   tar_target(AUC_2, map_depth(SDM_2, 4, ~.x@auc) %>%
@@ -313,6 +306,94 @@ tar_plan(
                mutate(delta_auc = auc - auc[env == "bc"]),
              pattern = map(AUC_6)),
 
+
+  tar_target(AUC_block_1, map_depth(SDM_block_1, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_1)),
+
+  tar_target(AUC_block_summ_1, AUC_block_1 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_1)),
+
+  tar_target(AUC_block_2, map_depth(SDM_block_2, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_2),
+             error = "null"),
+
+  tar_target(AUC_block_summ_2, AUC_block_2 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_2),
+             error = "null"),
+
+  tar_target(AUC_block_3, map_depth(SDM_block_3, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_3)),
+
+  tar_target(AUC_block_summ_3, AUC_block_3 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_3)),
+
+  tar_target(AUC_block_4, map_depth(SDM_block_4, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_4)),
+
+  tar_target(AUC_block_summ_4, AUC_block_4 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_4)),
+
+  tar_target(AUC_block_5, map_depth(SDM_block_5, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5)),
+
+  tar_target(AUC_block_summ_5, AUC_block_5 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_5)),
+
+  tar_target(AUC_block_6, map_depth(SDM_block_6, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_6)),
+
+  tar_target(AUC_block_summ_6, AUC_block_6 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_6)),
+
+
   tar_target(AUC_summ, bind_rows(AUC_summ_1 %>%
                          imap_dfr(~ .x %>% mutate(spec = .y)) %>%
                          mutate(group = 1),
@@ -326,6 +407,22 @@ tar_plan(
                          imap_dfr(~ .x %>% mutate(spec = .y)) %>%
                          mutate(group = 4),
                          AUC_summ_6 %>%
+                         imap_dfr(~ .x %>% mutate(spec = .y)) %>%
+                         mutate(group = 6))),
+
+  tar_target(AUC_block_summ, bind_rows(AUC_block_summ_1 %>%
+                         imap_dfr(~ .x %>% mutate(spec = .y)) %>%
+                         mutate(group = 1),
+                         AUC_block_summ_2 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 2),
+                         AUC_block_summ_3 %>%
+                         imap_dfr(~ .x %>% mutate(spec = .y)) %>%
+                         mutate(group = 3),
+                         AUC_block_summ_4 %>%
+                         imap_dfr(~ .x %>% mutate(spec = .y)) %>%
+                         mutate(group = 4),
+                         AUC_block_summ_6 %>%
                          imap_dfr(~ .x %>% mutate(spec = .y)) %>%
                          mutate(group = 6))),
 
@@ -345,11 +442,102 @@ tar_plan(
                          imap_dfr(~ .x %>% mutate(spec = .y)) %>%
                          mutate(group = 6))),
 
-  tar_target(AUC_mod, lmer(delta_auc ~ 0 + dataset*env + (1|spec),
+  tar_target(AUC_mod, lmer(delta_auc ~ 0 + dataset*env + (1|spec) + (1|model) + (1 | group),
                             data = AUC_summ %>%
                               filter(env != "bc", grepl("test", dataset)))),
 
   tar_target(AUC_emmeans, emmeans(AUC_mod, specs = ~ dataset | env)),
+
+  tar_target(AUC_plot_1, ggplot(AUC_summ %>%
+                                  ungroup() %>%
+                                  filter(env != "bc",
+                                         dataset %in% c("test", "env_test")) %>%
+                                  mutate(model = case_when(model == 'bc' ~ "BioClim",
+                                                           model == 'glm' ~ "GLM",
+                                                           model == 'rf' ~ "RandomForest"),
+                                         dataset = case_when(dataset == 'env_test' ~ "Environmental Space",
+                                                             dataset == 'test' ~ "Geographic Space"),
+                                         env = case_when(env == 'bm' ~ "Manifold Variables",
+                                                         env == 'pc' ~ "PCA Variables")),
+                                aes(model,delta_auc)) +
+               geom_violin(aes(fill = dataset),
+                           draw_quantiles = c(0.025, 0.5, 0.975)) +
+               facet_grid(vars(env)) +
+               ylab(TeX(r'($\bar{ \Delta AUC }$)')) +
+               scale_fill_discrete(name = "") +
+               theme_minimal() +
+               theme(legend.position = "bottom")
+             ),
+
+  tar_target(TSS_plot_1, ggplot(TSS_summ %>%
+                                  ungroup() %>%
+                                  filter(env != "bc",
+                                         dataset %in% c("test", "env_test")) %>%
+                                  mutate(model = case_when(model == 'bc' ~ "BioClim",
+                                                           model == 'glm' ~ "GLM",
+                                                           model == 'rf' ~ "RandomForest"),
+                                         dataset = case_when(dataset == 'env_test' ~ "Environmental Space",
+                                                             dataset == 'test' ~ "Geographic Space"),
+                                         env = case_when(env == 'bm' ~ "Manifold Variables",
+                                                         env == 'pc' ~ "PCA Variables")),
+                                aes(model,delta_tss)) +
+               geom_violin(aes(fill = dataset),
+                           draw_quantiles = c(0.025, 0.5, 0.975)) +
+               facet_grid(vars(env)) +
+               ylab(TeX(r'($\bar{ \Delta TSS }$)')) +
+               scale_fill_discrete(name = "") +
+               theme_minimal() +
+               theme(legend.position = "bottom")
+             ),
+
+  tar_target(TSS_plot_block_1, ggplot(TSS_block_summ %>%
+                                  ungroup() %>%
+                                  filter(env != "bc",
+                                         dataset %in% c("test", "env_test")) %>%
+                                  mutate(model = case_when(model == 'bc' ~ "BioClim",
+                                                           model == 'glm' ~ "GLM",
+                                                           model == 'rf' ~ "RandomForest"),
+                                         dataset = case_when(dataset == 'env_test' ~ "Environmental Space",
+                                                             dataset == 'test' ~ "Geographic Space"),
+                                         env = case_when(env == 'bm' ~ "Manifold Variables",
+                                                         env == 'pc' ~ "PCA Variables")),
+                                aes(model,delta_tss)) +
+               geom_violin(aes(fill = dataset),
+                           draw_quantiles = c(0.025, 0.5, 0.975)) +
+               facet_grid(vars(env)) +
+               ylab(TeX(r'($\bar{ \Delta AUC }$)')) +
+               scale_fill_discrete(name = "") +
+               theme_minimal() +
+               theme(legend.position = "bottom")
+             ),
+
+  tar_target(AUC_plot_block_1, ggplot(AUC_block_summ %>%
+                                  ungroup() %>%
+                                  filter(env != "bc",
+                                         dataset %in% c("test", "env_test")) %>%
+                                  mutate(model = case_when(model == 'bc' ~ "BioClim",
+                                                           model == 'glm' ~ "GLM",
+                                                           model == 'rf' ~ "RandomForest"),
+                                         dataset = case_when(dataset == 'env_test' ~ "Environmental Space",
+                                                             dataset == 'test' ~ "Geographic Space"),
+                                         env = case_when(env == 'bm' ~ "Manifold Variables",
+                                                         env == 'pc' ~ "PCA Variables")),
+                                aes(model,delta_auc)) +
+               geom_violin(aes(fill = dataset),
+                           draw_quantiles = c(0.025, 0.5, 0.975)) +
+               facet_grid(vars(env)) +
+               ylab(TeX(r'($\bar{ \Delta AUC }$)')) +
+               scale_fill_discrete(name = "") +
+               theme_minimal() +
+               theme(legend.position = "bottom")
+             ),
+
+  tar_target(AUC_block_mod, lmer(delta_auc ~ 0 + dataset*env + (1|spec) + (1|model) + (1|group),
+                            data = AUC_block_summ %>%
+                              filter(env != "bc", grepl("test", dataset)))),
+
+  tar_target(AUC_block_emmeans, emmeans(AUC_block_mod, specs = ~ dataset | env,
+                                        adjust = "sidak", cross.adjust = "sidak")),
 
   tar_target(TSS_mod, lmer(delta_tss ~ 0 + dataset*env + (1|spec),
                             data = TSS_summ %>%
