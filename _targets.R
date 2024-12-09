@@ -9,11 +9,12 @@ conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
 
 tar_option_set(
-  # controller = crew_controller_local(workers = 4,
+  # controller = crew_controller_local(workers = 1,
   #                                    seconds_idle = 5),
   iteration = "list",
   memory = "transient",
-  error = "continue"
+  error = "continue",
+  cue = tar_cue("never"),
 )
 
 ## tar_plan supports drake-style targets and also tar_target()
@@ -36,7 +37,13 @@ tar_plan(
   tar_target(pc_file, "data/bioclim_pca_10.tif",
              format = "file"),
 
+  tar_target(pc_file_5m, "data/bioclim_pca_10_5m.tif",
+             format = "file"),
+
   tar_target(bc_file, "data/bioclim_scaled.tif",
+             format = "file"),
+
+  tar_target(bc_file_5m, "data/bioclim_scaled_5.tif",
              format = "file"),
 
   tar_target(bm_file, c("data/bioclim_manifold_1.tif",
@@ -46,7 +53,18 @@ tar_plan(
                         "data/bioclim_manifold_5.tif"),
              format = "file"),
 
+  tar_target(bm_file_5m, c("data/bioclim_manifold_5m_1.tif",
+                           "data/bioclim_manifold_5m_2.tif",
+                           "data/bioclim_manifold_5m_3.tif",
+                           "data/bioclim_manifold_5m_4.tif",
+                           "data/bioclim_manifold_5m_5.tif"),
+             format = "file"),
+
   tar_target(pc_env, crop_envs(pc_file, borders, CRSs),
+             pattern = map(borders, CRSs),
+             iteration = "list"),
+
+  tar_target(pc_env_5m, crop_envs(pc_file_5m, borders, CRSs),
              pattern = map(borders, CRSs),
              iteration = "list"),
 
@@ -54,7 +72,15 @@ tar_plan(
              pattern = map(borders, CRSs),
              iteration = "list"),
 
+  tar_target(bc_env_5m, crop_envs(bc_file_5m, borders, CRSs),
+             pattern = map(borders, CRSs),
+             iteration = "list"),
+
   tar_target(bm_env, crop_envs(bm_file, borders, CRSs),
+             pattern = map(borders, CRSs),
+             iteration = "list"),
+
+  tar_target(bm_env_5m, crop_envs(bm_file_5m, borders, CRSs),
              pattern = map(borders, CRSs),
              iteration = "list"),
 
@@ -78,6 +104,18 @@ tar_plan(
              pattern = map(po_dfs, borders, BGs, CRSs, pc_env, bc_env, bm_env, specs),
              deployment = "main"),
 
+  tar_target(all_dat_lists_5m, list(po_df = po_dfs,
+                                    border = rep(list(borders), length(po_dfs)),
+                                    bg = rep(list(BGs), length(po_dfs)),
+                                    crs = rep(list(CRSs), length(po_dfs)),
+                                    pc_env = rep(list(pc_env_5m), length(po_dfs)),
+                                    bc_env = rep(list(bc_env_5m), length(po_dfs)),
+                                    bm_env = rep(list(bm_env_5m), length(po_dfs)),
+                                    spec = specs) %>%
+               transpose(),
+             pattern = map(po_dfs, borders, BGs, CRSs, pc_env_5m, bc_env_5m, bm_env_5m, specs),
+             deployment = "main"),
+
   tar_target(dat_1, all_dat_lists[[1]],
              deployment = "main"),
 
@@ -94,6 +132,24 @@ tar_plan(
              deployment = "main"),
 
   tar_target(dat_6, all_dat_lists[[6]],
+             deployment = "main"),
+
+  tar_target(dat_5m_1, all_dat_lists_5m[[1]],
+             deployment = "main"),
+
+  tar_target(dat_5m_2, all_dat_lists_5m[[2]],
+             deployment = "main"),
+
+  tar_target(dat_5m_3, all_dat_lists_5m[[3]],
+             deployment = "main"),
+
+  tar_target(dat_5m_4, all_dat_lists_5m[[4]],
+             deployment = "main"),
+
+  tar_target(dat_5m_5, all_dat_lists_5m[[5]],
+             deployment = "main"),
+
+  tar_target(dat_5m_6, all_dat_lists_5m[[6]],
              deployment = "main"),
 
   tar_target(SDM_1, get_models(dat_1),
@@ -133,6 +189,44 @@ tar_plan(
 
   tar_target(SDM_block_6, get_models_block(dat_6),
              pattern = map(dat_6)),
+
+  tar_target(SDM_5m_1, get_models(dat_5m_1),
+             pattern = map(dat_5m_1)),
+
+  tar_target(SDM_5m_2, get_models(dat_5m_2),
+             pattern = map(dat_5m_2),
+             error = "null"),
+
+  tar_target(SDM_5m_3, get_models(dat_5m_3),
+             pattern = map(dat_5m_3)),
+
+  tar_target(SDM_5m_4, get_models(dat_5m_4),
+             pattern = map(dat_5m_4)),
+
+  tar_target(SDM_5m_5, get_models(dat_5m_5),
+             pattern = map(dat_5m_5)),
+
+  tar_target(SDM_5m_6, get_models(dat_5m_6),
+             pattern = map(dat_5m_6)),
+
+  tar_target(SDM_block_5m_1, get_models_block(dat_5m_1),
+             pattern = map(dat_5m_1)),
+
+  tar_target(SDM_block_5m_2, get_models_block(dat_5m_2),
+             pattern = map(dat_5m_2),
+             error = "null"),
+
+  tar_target(SDM_block_5m_3, get_models_block(dat_5m_3),
+             pattern = map(dat_5m_3)),
+
+  tar_target(SDM_block_5m_4, get_models_block(dat_5m_4),
+             pattern = map(dat_5m_4)),
+
+  tar_target(SDM_block_5m_5, get_models_block(dat_5m_5),
+             pattern = map(dat_5m_5)),
+
+  tar_target(SDM_block_5m_6, get_models_block(dat_5m_6),
+             pattern = map(dat_5m_6)),
 
   tar_target(TSS_1, map_depth(SDM_1, 4, ~ mean(.x@TPR + .x@TNR - 1)) %>%
                list(all = .) %>%
@@ -306,6 +400,102 @@ tar_plan(
                mutate(delta_auc = auc - auc[env == "bc"]),
              pattern = map(AUC_6)),
 
+  tar_target(AUC_5m_1, map_depth(SDM_5m_1, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_5m_1),
+             error = "null"),
+
+  tar_target(AUC_5m_summ_1, AUC_5m_1 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_5m_1),
+             error = "null"),
+
+  tar_target(AUC_5m_2, map_depth(SDM_5m_2, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_5m_2),
+             error = "null"),
+
+  tar_target(AUC_5m_summ_2, AUC_5m_2 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_5m_2),
+             error = "null"),
+
+  tar_target(AUC_5m_3, map_depth(SDM_5m_3, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_5m_3),
+             error = "null"),
+
+  tar_target(AUC_5m_summ_3, AUC_5m_3 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_5m_3),
+             error = "null"),
+
+  tar_target(AUC_5m_4, map_depth(SDM_5m_4, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_5m_4),
+             error = "null"),
+
+  tar_target(AUC_5m_summ_4, AUC_5m_4 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_5m_4),
+             error = "null"),
+
+  tar_target(AUC_5m_5, map_depth(SDM_5m_5, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_5m_5),
+             error = "null"),
+
+  tar_target(AUC_5m_summ_5, AUC_5m_5 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_5m_5),
+             error = "null"),
+
+  tar_target(AUC_5m_6, map_depth(SDM_5m_6, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_5m_6),
+             error = "null"),
+
+  tar_target(AUC_5m_summ_6, AUC_5m_6 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_5m_6),
+             error = "null"),
+
 
   tar_target(AUC_block_1, map_depth(SDM_block_1, 4, ~.x@auc) %>%
                list(all = .) %>%
@@ -393,6 +583,102 @@ tar_plan(
                mutate(delta_auc = auc - auc[env == "bc"]),
              pattern = map(AUC_block_6)),
 
+  tar_target(AUC_block_5m_1, map_depth(SDM_block_5m_1, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5m_1),
+             error = "null"),
+
+  tar_target(AUC_block_5m_summ_1, AUC_block_5m_1 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_5m_1),
+             error = "null"),
+
+  tar_target(AUC_block_5m_2, map_depth(SDM_block_5m_2, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5m_2),
+             error = "null"),
+
+  tar_target(AUC_block_5m_summ_2, AUC_block_5m_2 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_5m_2),
+             error = "null"),
+
+  tar_target(AUC_block_5m_3, map_depth(SDM_block_5m_3, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5m_3),
+             error = "null"),
+
+  tar_target(AUC_block_5m_summ_3, AUC_block_5m_3 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_5m_3),
+             error = "null"),
+
+  tar_target(AUC_block_5m_4, map_depth(SDM_block_5m_4, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5m_4),
+             error = "null"),
+
+  tar_target(AUC_block_5m_summ_4, AUC_block_5m_4 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_4),
+             error = "null"),
+
+  tar_target(AUC_block_5m_5, map_depth(SDM_block_5m_5, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5m_5),
+             error = "null"),
+
+  tar_target(AUC_block_5m_summ_5, AUC_block_5m_5 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_5m_5),
+             error = "null"),
+
+  tar_target(AUC_block_5m_6, map_depth(SDM_block_5m_6, 4, ~.x@auc) %>%
+               list(all = .) %>%
+               as_tibble() %>%
+               mutate(model = names(all)) %>%
+               unnest_longer(all, values_to = "all", indices_to = "rep") %>%
+               unnest_longer(all, values_to = "all", indices_to = "env") %>%
+               unnest_longer(all, values_to = "auc", indices_to = "dataset"),
+             pattern = map(SDM_block_5m_6),
+             error = "null"),
+
+  tar_target(AUC_block_5m_summ_6, AUC_block_5m_6 %>%
+               group_by(model, dataset, rep) %>%
+               mutate(delta_auc = auc - auc[env == "bc"]),
+             pattern = map(AUC_block_5m_6),
+             error = "null"),
+
 
   tar_target(AUC_summ, bind_rows(AUC_summ_1 %>%
                          imap_dfr(~ .x %>% mutate(spec = .y)) %>%
@@ -424,6 +710,38 @@ tar_plan(
                          mutate(group = 4),
                          AUC_block_summ_6 %>%
                          imap_dfr(~ .x %>% mutate(spec = .y)) %>%
+                         mutate(group = 6))),
+
+  tar_target(AUC_5m_summ, bind_rows(AUC_5m_summ_1 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 1),
+                         AUC_5m_summ_2 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 2),
+                         AUC_5m_summ_3 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 3),
+                         AUC_5m_summ_4 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 4),
+                         AUC_5m_summ_6 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 6))),
+
+  tar_target(AUC_block_5m_summ, bind_rows(AUC_block_5m_summ_1 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 1),
+                         AUC_block_5m_summ_2 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 2),
+                         AUC_block_5m_summ_3 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 3),
+                         AUC_block_5m_summ_4 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
+                         mutate(group = 4),
+                         AUC_block_5m_summ_6 %>%
+                         imap_dfr(possibly(~ .x %>% mutate(spec = .y))) %>%
                          mutate(group = 6))),
 
   tar_target(TSS_summ, bind_rows(TSS_summ_1 %>%
@@ -544,6 +862,33 @@ tar_plan(
                               filter(env != "bc", grepl("test", dataset)))),
 
   tar_target(TSS_emmeans, emmeans(TSS_mod, specs = ~ dataset | env)),
+
+  tar_target(AUC_5m_mod, lmer(delta_auc ~ 0 + dataset*env + (1|spec) + (1|model) + (1 | group),
+                            data = AUC_5m_summ %>%
+                              filter(env != "bc", grepl("test", dataset)))),
+
+  tar_target(AUC_5m_emmeans, emmeans(AUC_5m_mod, specs = ~ dataset | env)),
+
+  tar_target(AUC_5m_plot_1, ggplot(AUC_5m_summ %>%
+                                  ungroup() %>%
+                                  filter(env != "bc",
+                                         dataset %in% c("test", "env_test")) %>%
+                                  mutate(model = case_when(model == 'bc' ~ "BioClim",
+                                                           model == 'glm' ~ "GLM",
+                                                           model == 'rf' ~ "RandomForest"),
+                                         dataset = case_when(dataset == 'env_test' ~ "Environmental Space",
+                                                             dataset == 'test' ~ "Geographic Space"),
+                                         env = case_when(env == 'bm' ~ "Manifold Variables",
+                                                         env == 'pc' ~ "PCA Variables")),
+                                aes(model,delta_auc)) +
+               geom_violin(aes(fill = dataset),
+                           draw_quantiles = c(0.025, 0.5, 0.975)) +
+               facet_grid(vars(env)) +
+               ylab(TeX(r'($\bar{ \Delta AUC }$)')) +
+               scale_fill_discrete(name = "") +
+               theme_minimal() +
+               theme(legend.position = "bottom")
+             ),
 
   tar_target(AUC_summ_it, AUC_summ %>%
                filter(env != "bc", grepl("test", dataset)) %>%

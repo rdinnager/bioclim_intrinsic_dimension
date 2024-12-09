@@ -73,7 +73,7 @@ get_models_block <- function(dat, spec) {
 }
 
 extract_model_evals <- function(mod_fun, enm_ob, env_bc, env_pc, env_bm, test_prop = 0.1, num_iter = 10) {
-
+  #browser()
   evals <- list()
     for(i in seq_len(num_iter)) {
       bc <- mod_fun(enm_ob, env_bc, test.prop = test_prop)

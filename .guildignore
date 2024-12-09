@@ -1,0 +1,7 @@
+_targets
+data\bioclim_5
+data\bioclim_10
+data\bioclim_30s
+data\bioclim_30s_parquet
+data\bioclim_30s_tiles
+data\bioclim_manifold*

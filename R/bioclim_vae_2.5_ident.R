@@ -1,0 +1,254 @@
+#| requires:
+#|     - file: ../data
+#|       target-type: link
+#|     - file: output
+
+library(torch)
+library(terra)
+library(tidyverse)
+library(dagnn)
+library(zeallot)
+
+bioclim_files <- list.files("data/bioclim_2.5", full.names = TRUE)
+bioclim <- map(bioclim_files, terra::rast)
+bioclim <- do.call(c, bioclim)
+
+ecoregions <- rast("data/bioclim_manifold_all_data.tif")[["layer"]]
+
+bioclim <- c(bioclim, ecoregions)
+
+bioclim_mat <- as.data.frame(bioclim, na.rm = TRUE) %>%
+  as.matrix()
+
+ecoreg_mat <- bioclim_mat[ , 20, drop = FALSE]
+
+ecoreg_mat <- model.matrix(~ . -1, data.frame(ecoreg = as.factor(ecoreg_mat)))
+
+bioclim_mat <- bioclim_mat[ , -20] %>%
+  scale()
+
+scaling <- list(means = attr(bioclim_mat, "scaled:center"),
+                sds = attr(bioclim_mat, "scaled:scale"))
+
+write_rds(scaling, "output/bioclim_scaling_ident.rds")
+
+bioclim_dataset <- dataset(name = "bioclim_ds",
+                           initialize = function(rr, er) {
+                             self$bioclim <- torch_tensor(rr)
+                             self$ecoreg <- torch_tensor(er)
+                           },
+                           .getbatch = function(i) {
+                             list(self$bioclim[i, ], self$ecoreg[i, ])
+                           },
+                           .length = function() {
+                             self$bioclim$size()[[1]]
+                           })
+
+train_ds <- bioclim_dataset(bioclim_mat, ecoreg_mat)
+train_dl <- dataloader(train_ds, 1300000, shuffle = TRUE)
+
+## note that this module includes the ability to provide data to condition on, making
+## it a 'conditional VAE', however, for this study I do not use any conditioning information
+## In this case we just provide a tensor of zeroes for the conditioning data, effectively turning
+## it into an unconditional VAE. The conditioning ability is for future extensions.
+vae_mod <- nn_module("CVAE",
+                 initialize = function(input_dim, c_dim, latent_dim, loggamma_init = 0) {
+                   self$latent_dim <- latent_dim
+                   self$input_dim <- input_dim
+                   self$encoder <- nndag(i_1 = ~ input_dim,
+                                         c = ~ c_dim,
+                                         c_1 = c ~ c_dim,
+                                         e_1 = i_1 + c_1 ~ latent_dim * 2,
+                                         e_2 = e_1 + c_1 ~ latent_dim * 2,
+                                         e_3 = e_2 + c_1 ~ latent_dim * 2,
+                                         means = e_3 ~ latent_dim,
+                                         logvars = e_3 ~ latent_dim,
+                                         .act = list(nn_relu,
+                                                     logvars = nn_identity,
+                                                     means = nn_identity))
+
+                   self$decoder <- nndag(i_1 = ~ latent_dim,
+                                         #c = ~ c_dim,
+                                         #c_1 = c ~ c_dim,
+                                         d_1 = i_1 ~ latent_dim * 2,
+                                         d_2 = d_1 ~ latent_dim * 2,
+                                         d_3 = d_2 ~ latent_dim * 2,
+                                         out = d_3 ~ input_dim,
+                                         .act = list(nn_relu,
+                                                     out = nn_identity))
+
+                   self$loggamma <- nn_parameter(torch_tensor(loggamma_init))
+
+                 },
+                 reparameterize = function(mean, logvar) {
+                   std <- torch_exp(torch_tensor(0.5, device = "cuda") * logvar)
+                   eps <- torch_randn_like(std)
+                   eps * std + mean
+                 },
+                 loss_function = function(reconstruction, input, mean, log_var) {
+                   kl <- torch_sum(torch_exp(log_var) + torch_square(mean) - log_var, dim = 2L) - latent_dim
+                   recon1 <- torch_sum(torch_square(input - reconstruction), dim = 2L) / torch_exp(self$loggamma)
+                   recon2 <- self$input_dim * self$loggamma + torch_log(torch_tensor(2 * pi, device = "cuda")) * self$input_dim
+                   loss <- torch_mean(recon1 + recon2 + kl)
+                   list(loss, torch_mean(recon1*torch_exp(self$loggamma)), torch_mean(kl))
+                 },
+                 forward = function(x, c) {
+                   c(means, log_vars) %<-% self$encoder(c, x)
+                   z <- self$reparameterize(means, log_vars)
+                   list(self$decoder(z), x, means, log_vars)
+                 })
+
+input_dim <- 19
+c_dim <- 14
+latent_dim <- 16
+
+vae <- vae_mod(input_dim, c_dim, latent_dim, loggamma_init = -4)
+vae <- vae$cuda()
+
+num_epochs <- 1000
+
+lr <- 0.005
+optimizer <- optim_adam(vae$parameters, lr = lr)
+scheduler <- lr_one_cycle(optimizer, max_lr = lr,
+                          epochs = num_epochs, steps_per_epoch = length(train_dl),
+                          cycle_momentum = FALSE)
+
+
+for (epoch in 1:num_epochs) {
+
+    batchnum <- 0
+    coro::loop(for (b in train_dl) {
+
+        batchnum <- batchnum + 1
+        optimizer$zero_grad()
+        input <- b[[1]]$cuda()
+        #c_null <- torch_zeros(input$size()[[1]], 1, device = "cuda") ## null conditioning data
+        c(reconstruction, input, mean, log_var) %<-% vae(input, b[[2]]$cuda())
+        c(loss, reconstruction_loss, kl_loss) %<-% vae$loss_function(reconstruction, input, mean, log_var)
+
+
+        if(batchnum %% 10 == 0) {
+
+            cat("step: ", epoch, "\n",
+                "batch: ", batchnum, "\n",
+                "loss: ", as.numeric(loss$cpu()), "\n",
+                "recon_loss: ", as.numeric(reconstruction_loss$cpu()), "\n",
+                "KL_loss: ", as.numeric(kl_loss$cpu()), "\n",
+                "loggamma: ", as.numeric(vae$loggamma$cpu()), "\n",
+                #"    loggamma: ", loggamma,
+                "active_dims: ", as.numeric((torch_exp(log_var)$mean(dim = 1L) < 0.5)$sum()$cpu()),
+                "\n",
+                sep = "")
+
+        }
+        loss$backward()
+        optimizer$step()
+        scheduler$step()
+    })
+}
+
+############### figures for VAE #####################
+
+options(torch.serialization_version = 2)
+torch_save(vae, "output/trained_vae.to")
+
+post_dl <- dataloader(train_ds, 500000, shuffle = FALSE)
+post_it <- as_iterator(post_dl)
+
+all_mean_var <- list()
+it <- 0
+loop(for(i in post_dl) {
+  it <- it + 1
+  with_no_grad({
+    c_null <- i[[2]]$cuda()
+    all_mean_var[[it]] <- vae$encoder(c_null, i[[1]]$cuda())
+  })
+  print(it)
+})
+
+all_means <- map(all_mean_var, 1) %>%
+  map(~ as.matrix(.x$cpu())) %>%
+  do.call(rbind, .)
+
+all_vars <- map(all_mean_var, 2) %>%
+  map(~ as.matrix(torch_exp(.x)$cpu())) %>%
+  do.call(rbind, .)
+
+vars <- apply(all_vars, 2, mean)
+
+vars_df <- tibble(`Mean Variance` = vars) %>%
+  mutate(Status = ifelse(`Mean Variance` < 0.5, "Keep", "Toss"))
+
+p <- ggplot(vars_df, aes(`Mean Variance`)) +
+  geom_histogram(aes(fill = Status)) +
+  ylab("Count") +
+  theme_minimal() +
+  theme(legend.position = "none")
+plot(p)
+
+manifold_dims <- vars < 0.5
+
+non_manifold_dim_nums <- which(!manifold_dims)
+write_rds(non_manifold_dim_nums, "output/non_manifold_dim_nums.rds")
+
+## run decoder using only manifold dimensions and calculate reconstruction
+recon_loss <- list()
+it <- 0
+loop(for(i in post_dl) {
+  it <- it + 1
+  with_no_grad({
+    c_null <- i[[2]]$cuda()
+    input <- i[[1]]$cuda()
+    all_mean_var <- vae$encoder(c_null, input)
+    z <- all_mean_var$means$clone()
+    z[ , non_manifold_dim_nums] <- 0
+    recon <- vae$decoder(z)
+    recon_loss[[it]] <- torch_mean((input - recon)^2)
+
+  })
+  print(it)
+})
+mse <- mean(unlist(map(recon_loss, ~ as.numeric(.x$cpu()))))
+
+cat("MSE:", mse)
+
+## MSE = 0.0036
+
+mean_variances <- apply(all_means, 2, var)
+
+bioclim_df <- as.data.frame(bioclim, na.rm = TRUE, xy = TRUE) %>%
+  select(x, y) %>%
+  bind_cols(as.data.frame(all_means[ , manifold_dims]))
+
+n_dims <- sum(manifold_dims)
+colnames(bioclim_df) <- c("x", "y", paste("manifold", 1:n_dims, sep = "_"))
+
+write_csv(bioclim_df, "output/vae_manifold_vars.csv")
+
+p <- ggplot(bioclim_df, aes(x, y)) +
+  geom_raster(aes(fill = manifold_1)) +
+  scale_fill_viridis_c("inferno") +
+  coord_equal() +
+  theme_minimal()
+
+plot(p)
+
+vae_rast <- rast(bioclim_df, type = "xyz", crs = crs(bioclim), extent = ext(c(min(bioclim_df$x),
+                                                                              max(bioclim_df$x),
+                                                                              min(bioclim_df$y),
+                                                                              max(bioclim_df$y))))
+
+vae_rast2 <- project(vae_rast, bioclim)
+vae_rast <- vae_rast2
+
+names(vae_rast) <- paste0("BIOMAN", 1:n_dims)
+filenames <- paste0("output/bioclim_manifold_", 1:n_dims, ".tif")
+writeRaster(vae_rast, filenames,
+            overwrite = TRUE)
+
+plot(vae_rast)
+
+cat("n_dims:", n_dims)
+
+
+

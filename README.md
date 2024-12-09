@@ -24,7 +24,7 @@ This code uses my in-develpment package [`dagnn`](https://github.com/rdinnager/d
 
 WorldClim data necessary to run the code in [`R/bioclim_vae.R`](https://github.com/rdinnager/bioclim_intrinsic_dimension/blob/master/R/bioclim_vae.R) can be downloaded [here](https://www.worldclim.org/data/worldclim21.html). 
 
-Data generated as part of this stuudy, that is, the 5 manifold variables that encode the information in the 19 WorldClim bioclimatic variables have been provided as part of the R package [`biocman`](https://github.com/rdinnager/biocman).
+Data generated as part of this study, that is, the 5 manifold variables that encode the information in the 19 WorldClim bioclimatic variables have been provided as part of the R package [`biocman`](https://github.com/rdinnager/biocman).
 
 
 
