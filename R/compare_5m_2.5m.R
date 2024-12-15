@@ -1,5 +1,6 @@
 library(tidyverse)
 library(terra)
+library(guildai)
 library(alignProMises)
 
 runs <- runs_info() |>
