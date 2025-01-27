@@ -13,12 +13,28 @@ tar_option_set(
   #                                    seconds_idle = 5),
   iteration = "list",
   memory = "transient",
-  error = "continue",
-  cue = tar_cue("never"),
+  error = "continue"
 )
 
 ## tar_plan supports drake-style targets and also tar_target()
 tar_plan(
+
+  tar_target(n_runs, 10),
+
+  tar_target(model_run_labels, paste0("run_", 1:n_runs)),
+
+  tar_target(model_run_labels_2.5, paste0(model_run_labels, "_2.5")),
+
+  tar_target(ivae_lat_long_script, "bioclim_ivae_lat_long.R"),
+
+  tar_target(model_runs_2.5, run_model_guildai(script = ivae_lat_long_script,
+                                               label = model_run_labels_2.5,
+                                               tag = "ident_lat_lon_weighted_scratch",
+                                               flags = list(loggamma_init = -5.0,
+                                                            num_epochs = 10000,
+                                                            lr = 0.0005,
+                                                            res = "2.5")),
+             pattern = map(model_run_labels_2.5)),
 
   tar_target(regions, c("AWT", "NSW", "CAN", "NZ", "SA", "SWI")),
 

@@ -3,33 +3,84 @@ library(terra)
 library(guildai)
 library(alignProMises)
 
+assignInNamespace("find_guild", guildai:::find_r_guildai_guild, ns = "guildai")
+
+Sys.setenv(GUILD_HOME = "/blue/rdinnage.fiu/rdinnage.fiu/.guild") #"/home/rdinnage.fiu/.guild") #"/blue/rdinnage.fiu/rdinnage.fiu/.guild")
+
 runs <- runs_info() |>
   filter(status == "completed",
-         tags == "ident_ecoregion")
-dirs <- runs$dir
+         tags == "ident_lat_lon_weighted")
+
+runs_5 <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted",
+         scalars$active_dims == 5)
+dirs <- runs_5$dir
 files <- file.path(dirs, "output/vae_manifold_vars.csv")
 
 bioman_2.5_run_dat <- map(files, read_csv)
 
-bioman_2.5_all <- bioman_2.5_run_dat[[1]] |>
+bioman_2.5_all_5 <- bioman_2.5_run_dat[[1]] |>
   rename_with(~paste0(., "_run1"), c(-x, -y))
 
 for(i in 2:length(bioman_2.5_run_dat)) {
-  bioman_2.5_all <- bioman_2.5_all |>
+  bioman_2.5_all_5 <- bioman_2.5_all_5 |>
     left_join(bioman_2.5_run_dat[[i]] |>
                 rename_with(~paste0(., "_run", i),
                             c(-x, -y)),
               by = c("x", "y"))
 }
 
-runs <- 1:length(files)
+samp <- sample.int(nrow(bioman_2.5_run_dat[[1]]), 10000)
+plot(abs(bioman_2.5_run_dat[[1]]$y[samp]), bioman_2.5_run_dat[[1]]$manifold_1[samp])
+plot(abs(bioman_2.5_run_dat[[1]]$y[samp]), bioman_2.5_run_dat[[1]]$manifold_2[samp])
+plot(abs(bioman_2.5_run_dat[[1]]$y[samp]), bioman_2.5_run_dat[[1]]$manifold_3[samp])
+plot(abs(bioman_2.5_run_dat[[1]]$y[samp]), bioman_2.5_run_dat[[1]]$manifold_4[samp])
+plot(abs(bioman_2.5_run_dat[[1]]$y[samp]), bioman_2.5_run_dat[[1]]$manifold_5[samp])
+
+plot(bioman_2.5_run_dat[[3]]$y[samp], bioman_2.5_run_dat[[3]]$manifold_1[samp])
+plot(bioman_2.5_run_dat[[3]]$y[samp], bioman_2.5_run_dat[[3]]$manifold_2[samp])
+plot(bioman_2.5_run_dat[[3]]$y[samp], bioman_2.5_run_dat[[3]]$manifold_3[samp])
+plot(bioman_2.5_run_dat[[3]]$y[samp], bioman_2.5_run_dat[[3]]$manifold_4[samp])
+plot(bioman_2.5_run_dat[[3]]$y[samp], bioman_2.5_run_dat[[3]]$manifold_5[samp])
+
+plot(abs(bioman_2.5_run_dat[[4]]$y[samp]), bioman_2.5_run_dat[[4]]$manifold_5[samp])
+
+runs_i <- 1:length(files)
 bioman_mats <- list()
 
-for(i in runs) {
-  bioman_mats[[i]] <- bioman_2.5_all |>
+for(i in runs_i) {
+  bioman_mats[[i]] <- bioman_2.5_all_5 |>
     select(ends_with(paste0("_run", i))) |>
     as.matrix()
 }
+
+combs <- expand.grid(bioman1 = 1:5, bioman2 = 1:5)
+cors <- apply(combs, 1, function(x) cor(bioman_mats[[1]][ , x[1]], bioman_mats[[5]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+cors <- apply(combs, 1, function(x) cor(bioman_mats[[1]][ , x[1]], bioman_mats[[4]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+cors <- apply(combs, 1, function(x) cor(bioman_mats[[1]][ , x[1]], bioman_mats[[6]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+samp <- sample.int(nrow(bioman_mats[[1]]), 1000)
+plot(bioman_mats[[1]][samp, 5], bioman_mats[[1]][samp, 1])
+
+cor_1_2 <- outer(bioman_mats[[1]], bioman_mats[[2]],
+                 cor)
+
+bioman_2.5_aligned_1_2 <- ProMisesModel(bioman_mats[c(2, 1)],
+                                    maxIt = 100,
+                                    t = 1/1000,
+                                    k = 1)
+cors <- apply(combs, 1, function(x) cor(bioman_2.5_aligned_1_2$Xest[ , x[1], 1], bioman_2.5_aligned_1_2$Xest[ , x[2], 2]))
+combs <- combs |>
+  mutate(corr = cors)
 
 bioman_2.5_aligned <- ProMisesModel(bioman_mats,
                                     maxIt = 100,
@@ -93,3 +144,163 @@ colnames(bioclim_2.5m)[3:7] <- paste0(colnames(bioclim_2.5m)[3:7], "_2.5m")
 bioclim_combined <- bioclim_5m |>
   left_join(bioclim_2.5m, by = c("x", "y"))
 
+
+############## Do 4 dims ################
+
+runs_4 <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted",
+         scalars$active_dims == 4)
+dirs <- runs_4$dir
+files <- file.path(dirs, "output/vae_manifold_vars.csv")
+
+bioman_2.5_run_dat <- map(files, read_csv)
+
+bioman_2.5_all_4 <- bioman_2.5_run_dat[[1]] |>
+  rename_with(~paste0(., "_run1"), c(-x, -y))
+
+for(i in 2:length(bioman_2.5_run_dat)) {
+  bioman_2.5_all_4 <- bioman_2.5_all_4 |>
+    left_join(bioman_2.5_run_dat[[i]] |>
+                rename_with(~paste0(., "_run", i),
+                            c(-x, -y)),
+              by = c("x", "y"))
+}
+
+runs_i <- 1:length(files)
+bioman_mats_4 <- list()
+
+for(i in runs_i) {
+  bioman_mats_4[[i]] <- bioman_2.5_all_4 |>
+    select(ends_with(paste0("_run", i))) |>
+    as.matrix()
+}
+
+combs <- expand.grid(bioman1 = 1:4, bioman2 = 1:4)
+cors <- apply(combs, 1, function(x) cor(bioman_mats_4[[1]][ , x[1]], bioman_mats_4[[2]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+cors <- apply(combs, 1, function(x) cor(bioman_mats[[1]][ , x[1]], bioman_mats[[4]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+#### 6 dims ###########
+
+runs_6 <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted",
+         scalars$active_dims == 6)
+dirs <- runs_6$dir
+files <- file.path(dirs, "output/vae_manifold_vars.csv")
+
+bioman_2.5_run_dat <- map(files, read_csv)
+
+bioman_2.5_all_6 <- bioman_2.5_run_dat[[1]] |>
+  rename_with(~paste0(., "_run1"), c(-x, -y))
+
+for(i in 2:length(bioman_2.5_run_dat)) {
+  bioman_2.5_all_6 <- bioman_2.5_all_6 |>
+    left_join(bioman_2.5_run_dat[[i]] |>
+                rename_with(~paste0(., "_run", i),
+                            c(-x, -y)),
+              by = c("x", "y"))
+}
+
+runs_i <- 1:length(files)
+bioman_mats_6 <- list()
+
+for(i in runs_i) {
+  bioman_mats_6[[i]] <- bioman_2.5_all_6 |>
+    select(ends_with(paste0("_run", i))) |>
+    as.matrix()
+}
+
+combs <- expand.grid(bioman1 = 1:6, bioman2 = 1:6)
+cors <- apply(combs, 1, function(x) cor(bioman_mats_6[[1]][ , x[1]], bioman_mats_6[[2]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+cors <- apply(combs, 1, function(x) cor(bioman_mats[[1]][ , x[1]], bioman_mats[[4]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+
+########### res = 10 ##########
+runs <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted_10")
+
+runs_5 <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted_10",
+         scalars$active_dims == 5)
+dirs <- runs_5$dir
+files <- file.path(dirs, "output/vae_manifold_vars.csv")
+
+bioman_2.5_run_dat <- map(files, read_csv)
+
+bioman_2.5_all_5 <- bioman_2.5_run_dat[[1]] |>
+  rename_with(~paste0(., "_run1"), c(-x, -y))
+
+for(i in 2:length(bioman_2.5_run_dat)) {
+  bioman_2.5_all_5 <- bioman_2.5_all_5 |>
+    left_join(bioman_2.5_run_dat[[i]] |>
+                rename_with(~paste0(., "_run", i),
+                            c(-x, -y)),
+              by = c("x", "y"))
+}
+
+runs_i <- 1:length(files)
+bioman_mats_5 <- list()
+
+for(i in runs_i) {
+  bioman_mats_5[[i]] <- bioman_2.5_all_5 |>
+    select(ends_with(paste0("_run", i))) |>
+    as.matrix()
+}
+
+combs <- expand.grid(bioman1 = 1:5, bioman2 = 1:5)
+cors <- apply(combs, 1, function(x) cor(bioman_mats_5[[1]][ , x[1]], bioman_mats_5[[2]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
+
+
+########### res = 5 ##########
+runs <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted_5")
+
+runs_5 <- runs_info() |>
+  filter(status == "completed",
+         tags == "ident_lat_lon_weighted_5",
+         scalars$active_dims == 5)
+dirs <- runs_5$dir
+files <- file.path(dirs, "output/vae_manifold_vars.csv")
+
+bioman_2.5_run_dat <- map(files, read_csv)
+
+bioman_2.5_all_5 <- bioman_2.5_run_dat[[1]] |>
+  rename_with(~paste0(., "_run1"), c(-x, -y))
+
+for(i in 2:length(bioman_2.5_run_dat)) {
+  bioman_2.5_all_5 <- bioman_2.5_all_5 |>
+    left_join(bioman_2.5_run_dat[[i]] |>
+                rename_with(~paste0(., "_run", i),
+                            c(-x, -y)),
+              by = c("x", "y"))
+}
+
+runs_i <- 1:length(files)
+bioman_mats_5 <- list()
+
+for(i in runs_i) {
+  bioman_mats_5[[i]] <- bioman_2.5_all_5 |>
+    select(ends_with(paste0("_run", i))) |>
+    as.matrix()
+}
+
+combs <- expand.grid(bioman1 = 1:5, bioman2 = 1:5)
+cors <- apply(combs, 1, function(x) cor(bioman_mats_5[[1]][ , x[1]], bioman_mats_5[[3]][ , x[2]]))
+combs <- combs |>
+  mutate(corr = cors)
