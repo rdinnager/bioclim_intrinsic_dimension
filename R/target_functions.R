@@ -5,6 +5,7 @@ run_model_guildai <- function(script = "bioclim_ivae_lat_long.R",
   Sys.setenv(GUILD_HOME = GUILD_HOME) #"/home/rdinnage.fiu/.guild") #"/blue/rdinnage.fiu/rdinnage.fiu/.guild")
 
   guild_run(script, label = label, tag = tag, as_job = FALSE,
+            run_dir = file.path(".guild", "runs", label),
             flags = flags, comment = comment#, test_sourcecode = TRUE
             )
 

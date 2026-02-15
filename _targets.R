@@ -19,22 +19,40 @@ tar_option_set(
 ## tar_plan supports drake-style targets and also tar_target()
 tar_plan(
 
-  tar_target(n_runs, 10),
+  tar_target(n_runs, 8),
 
   tar_target(model_run_labels, paste0("run_", 1:n_runs)),
 
-  tar_target(model_run_labels_2.5, paste0(model_run_labels, "_2.5")),
+  tar_target(model_run_labels_2.5_lgneg4.5, paste0(model_run_labels, "_2.5_lgneg4.5")),
+
+  tar_target(model_run_labels_2.5_lgneg3.5, paste0(model_run_labels, "_2.5_lgneg3.5")),
 
   tar_target(ivae_lat_long_script, "bioclim_ivae_lat_long.R"),
 
-  tar_target(model_runs_2.5, run_model_guildai(script = ivae_lat_long_script,
-                                               label = model_run_labels_2.5,
+  tar_target(model_runs_2.5_lgneg4.5, run_model_guildai(script = ivae_lat_long_script,
+                                               label = model_run_labels_2.5_lgneg4.5,
                                                tag = "ident_lat_lon_weighted_scratch",
-                                               flags = list(loggamma_init = -5.0,
-                                                            num_epochs = 10000,
+                                               flags = list(loggamma_init = -4.5,
+                                                            num_epochs = 5000,
                                                             lr = 0.0005,
                                                             res = "2.5")),
-             pattern = map(model_run_labels_2.5)),
+             pattern = map(model_run_labels_2.5_lgneg4.5)),
+
+  tar_target(model_runs_2.5_lgneg3.5, run_model_guildai(script = ivae_lat_long_script,
+                                               label = model_run_labels_2.5_lgneg3.5,
+                                               tag = "ident_lat_lon_weighted_scratch",
+                                               flags = list(loggamma_init = -3.5,
+                                                            num_epochs = 5000,
+                                                            lr = 0.0005,
+                                                            res = "2.5")),
+             pattern = map(model_run_labels_2.5_lgneg3.5)),
+
+  tar_target(model_runs_2.5, bind_rows(list_rbind(model_runs_2.5_lgneg3.5),
+                                       list_rbind(model_runs_2.5_lgneg4.5))),
+
+  tar_target(MCC_2.5_n5, run_mcc_analysis(model_runs_2.5 |>
+                                            unnest(cols = c(scalars, flags)) |>
+                                            filter(active_dims == 5))),
 
   tar_target(regions, c("AWT", "NSW", "CAN", "NZ", "SA", "SWI")),
 
