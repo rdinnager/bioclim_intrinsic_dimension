@@ -9,3 +9,9 @@ data/bioclim_5*
 data/bioclim_10*
 data/bioclim_30s*
 logs
+
+# Hub files live in the private outer folder (two-repo split, 2026-09-14).
+# Guard against a hub routine or agent writing them into this repo by mistake.
+CLAUDE.md
+TODO.md
+_meta/
